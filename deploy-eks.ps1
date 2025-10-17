@@ -67,11 +67,23 @@ if ($confirm -ne 'y') {
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "Creating CloudFormation Stack..." -ForegroundColor Cyan
+Write-Host "Creating or Updating CloudFormation Stack..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
-# Create CloudFormation stack
-try {
+# Check if stack already exists
+$existing = aws cloudformation describe-stacks --stack-name $StackName --region $Region 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "[INFO] Stack already exists — updating instead..." -ForegroundColor Yellow
+    aws cloudformation update-stack `
+        --stack-name $StackName `
+        --template-body file://eks-cluster.yaml `
+        --parameters `
+            ParameterKey=ClusterName,ParameterValue=$ClusterName `
+            ParameterKey=NodeInstanceType,ParameterValue=$NodeInstanceType `
+            ParameterKey=NodeGroupDesiredSize,ParameterValue=$DesiredNodes `
+        --capabilities CAPABILITY_NAMED_IAM `
+        --region $Region
+} else {
     aws cloudformation create-stack `
         --stack-name $StackName `
         --template-body file://eks-cluster.yaml `
@@ -81,24 +93,20 @@ try {
             ParameterKey=NodeGroupDesiredSize,ParameterValue=$DesiredNodes `
         --capabilities CAPABILITY_NAMED_IAM `
         --region $Region
+}
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "[ERROR] Failed to create stack" -ForegroundColor Red
-        exit 1
-    }
-
-    Write-Host "[OK] Stack creation initiated" -ForegroundColor Green
-} catch {
-    Write-Host "[ERROR] Error creating stack: $_" -ForegroundColor Red
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Failed to create or update stack" -ForegroundColor Red
     exit 1
 }
 
+Write-Host "[OK] Stack operation initiated" -ForegroundColor Green
 Write-Host ""
-Write-Host "Waiting for stack creation to complete..." -ForegroundColor Yellow
-Write-Host "This will take approximately 15-20 minutes..." -ForegroundColor Gray
+Write-Host "Waiting for stack operation to complete..." -ForegroundColor Yellow
+Write-Host "This will take approximately 15–20 minutes..." -ForegroundColor Gray
 Write-Host ""
 
-# Wait for stack creation
+# Wait for stack completion
 $startTime = Get-Date
 $timeout = 30 # minutes
 $checkInterval = 30 # seconds
@@ -116,15 +124,13 @@ while ($true) {
     
     Write-Host "[$elapsed min] Stack status: $stackStatus" -ForegroundColor Cyan
     
-    if ($stackStatus -eq "CREATE_COMPLETE") {
+    if ($stackStatus -eq "CREATE_COMPLETE" -or $stackStatus -eq "UPDATE_COMPLETE") {
         Write-Host ""
-        Write-Host "[OK] Stack created successfully!" -ForegroundColor Green
+        Write-Host "[OK] Stack operation completed successfully!" -ForegroundColor Green
         break
     } elseif ($stackStatus -match "ROLLBACK|FAILED") {
         Write-Host ""
-        Write-Host "[ERROR] Stack creation failed with status: $stackStatus" -ForegroundColor Red
-        Write-Host ""
-        Write-Host "Checking stack events for errors..." -ForegroundColor Yellow
+        Write-Host "[ERROR] Stack operation failed with status: $stackStatus" -ForegroundColor Red
         aws cloudformation describe-stack-events `
             --stack-name $StackName `
             --region $Region `
@@ -135,7 +141,7 @@ while ($true) {
     
     if ($elapsed -gt $timeout) {
         Write-Host ""
-        Write-Host "[ERROR] Timeout waiting for stack creation ($timeout minutes)" -ForegroundColor Red
+        Write-Host "[ERROR] Timeout waiting for stack operation ($timeout minutes)" -ForegroundColor Red
         exit 1
     }
 }
@@ -146,17 +152,12 @@ Write-Host "Configuring kubectl..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
 # Update kubeconfig
-try {
-    aws eks update-kubeconfig --region $Region --name $ClusterName
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "[OK] kubeconfig updated successfully" -ForegroundColor Green
-    } else {
-        Write-Host "[ERROR] Failed to update kubeconfig" -ForegroundColor Red
-        exit 1
-    }
-} catch {
-    Write-Host "[ERROR] Error updating kubeconfig: $_" -ForegroundColor Red
+aws eks update-kubeconfig --region $Region --name $ClusterName
+
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "[OK] kubeconfig updated successfully" -ForegroundColor Green
+} else {
+    Write-Host "[ERROR] Failed to update kubeconfig" -ForegroundColor Red
     exit 1
 }
 
@@ -191,8 +192,10 @@ Write-Host "  Stack: $StackName" -ForegroundColor White
 Write-Host ""
 Write-Host "Next Steps:" -ForegroundColor Cyan
 Write-Host "  1. Verify cluster: kubectl get nodes" -ForegroundColor White
-Write-Host "  2. Install ArgoCD: kubectl create namespace argocd" -ForegroundColor White
-Write-Host "     kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml" -ForegroundColor White
-Write-Host "  3. When done, cleanup: .\cleanup-eks.ps1" -ForegroundColor White
+Write-Host "  2. Install ArgoCD:" -ForegroundColor White
+Write-Host "     kubectl create namespace argocd" -ForegroundColor Gray
+Write-Host "     kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml" -ForegroundColor Gray
+Write-Host "  3. Expose ArgoCD server:" -ForegroundColor White
+Write-Host "     kubectl patch svc argocd-server -n argocd -p '{""spec"":{""type"":""LoadBalancer""}}'" -ForegroundColor Gray
 Write-Host ""
-Write-Host "Happy learning!" -ForegroundColor Green
+Write-Host "Happy learning, 🚀" -ForegroundColor Green

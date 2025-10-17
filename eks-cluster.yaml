@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'EKS Cluster for ArgoCD Tutorial - One NAT Gateway (cost-optimized)'
+Description: 'EKS Cluster for ArgoCD Tutorial - One NAT Gateway (cost-optimized, with EBS CSI support)'
 
 Parameters:
   ClusterName:
@@ -14,7 +14,7 @@ Parameters:
   
   NodeInstanceType:
     Type: String
-    Default: t3.small
+    Default: t3.medium
     Description: EC2 instance type for worker nodes
   
   NodeGroupDesiredSize:
@@ -88,8 +88,8 @@ Resources:
           Value: !Sub '${ClusterName}-public-subnet-1'
         - Key: kubernetes.io/role/elb
           Value: '1'
-        - Key: !Sub 'kubernetes.io/cluster/${ClusterName}'
-          Value: shared
+        - Key: kubernetes.io/cluster/argocd-tutorial-cluster
+          Value: "owned"
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
@@ -103,8 +103,8 @@ Resources:
           Value: !Sub '${ClusterName}-public-subnet-2'
         - Key: kubernetes.io/role/elb
           Value: '1'
-        - Key: !Sub 'kubernetes.io/cluster/${ClusterName}'
-          Value: shared
+        - Key: kubernetes.io/cluster/argocd-tutorial-cluster
+          Value: "owned"
 
   # Private Subnets
   PrivateSubnet1:
@@ -118,8 +118,8 @@ Resources:
           Value: !Sub '${ClusterName}-private-subnet-1'
         - Key: kubernetes.io/role/internal-elb
           Value: '1'
-        - Key: !Sub 'kubernetes.io/cluster/${ClusterName}'
-          Value: shared
+        - Key: kubernetes.io/cluster/argocd-tutorial-cluster
+          Value: "owned"
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
@@ -132,8 +132,8 @@ Resources:
           Value: !Sub '${ClusterName}-private-subnet-2'
         - Key: kubernetes.io/role/internal-elb
           Value: '1'
-        - Key: !Sub 'kubernetes.io/cluster/${ClusterName}'
-          Value: shared
+        - Key: kubernetes.io/cluster/argocd-tutorial-cluster
+          Value: "owned"
 
   # One NAT Gateway (shared)
   NatGatewayEIP:
@@ -252,7 +252,7 @@ Resources:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
         EndpointPublicAccess: true
-        EndpointPrivateAccess: true
+        EndpointPrivateAccess: false
       Tags:
         - Key: Name
           Value: !Ref ClusterName
@@ -273,6 +273,21 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+
+  EbsCsiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ClusterName}-ebs-csi-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
 
   NodeGroup:
     Type: AWS::EKS::Nodegroup
@@ -293,6 +308,14 @@ Resources:
       AmiType: AL2_x86_64
       Tags:
         Name: !Sub '${ClusterName}-node'
+
+  EbsCsiAddon:
+    Type: AWS::EKS::Addon
+    Properties:
+      ClusterName: !Ref ClusterName
+      AddonName: aws-ebs-csi-driver
+      AddonVersion: latest
+      ServiceAccountRoleArn: !GetAtt EbsCsiRole.Arn
 
 Outputs:
   ClusterName:

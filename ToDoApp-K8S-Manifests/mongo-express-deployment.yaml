@@ -12,6 +12,7 @@ spec:
       labels:
         app: mongo-express
     spec:
+      restartPolicy: Always
       containers:
         - name: mongo-express
           image: mongo-express:latest
@@ -23,8 +24,22 @@ spec:
             - name: ME_CONFIG_MONGODB_PORT
               value: "27017"
             - name: ME_CONFIG_MONGODB_ENABLE_ADMIN
-              value: "false"    # ⬅ ändra till false
+              value: "true"
             - name: ME_CONFIG_BASICAUTH_USERNAME
               value: "admin"
             - name: ME_CONFIG_BASICAUTH_PASSWORD
               value: "pass"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "250m"
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 6
