@@ -33,7 +33,7 @@ spec:
       name: mongodb-data
     spec:
       accessModes: ["ReadWriteOnce"]  # Single node read/write access
-      storageClassName: gp2  # Uses default AWS EBS gp2 storage
+      storageClassName: ebs-sc  # Uses default AWS EBS gp2 storage
       resources:
         requests:
           storage: 1Gi
