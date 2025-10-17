@@ -18,21 +18,13 @@ spec:
           ports:
             - containerPort: 8081
           env:
-          - name: ME_CONFIG_MONGODB_URL
-            value: "mongodb://mongodb-service:27017"
-
-          - name: ME_CONFIG_MONGODB_SERVER
-            value: "mongodb-service"
-          - name: ME_CONFIG_MONGODB_PORT
-            value: "27017"
-          - name: ME_CONFIG_MONGODB_ENABLE_ADMIN
-            value: "true"
-          - name: ME_CONFIG_MONGODB_AUTH_USERNAME
-            value: ""
-          - name: ME_CONFIG_MONGODB_AUTH_PASSWORD
-            value: ""
-          - name: ME_CONFIG_BASICAUTH_USERNAME
-            value: "admin"
-          - name: ME_CONFIG_BASICAUTH_PASSWORD
-            value: "pass"
-
+            - name: ME_CONFIG_MONGODB_SERVER
+              value: "mongodb-service"
+            - name: ME_CONFIG_MONGODB_PORT
+              value: "27017"
+            - name: ME_CONFIG_MONGODB_ENABLE_ADMIN
+              value: "false"    # ⬅ ändra till false
+            - name: ME_CONFIG_BASICAUTH_USERNAME
+              value: "admin"
+            - name: ME_CONFIG_BASICAUTH_PASSWORD
+              value: "pass"
